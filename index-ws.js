@@ -20,19 +20,26 @@ const WebSocketServer = require('ws').Server;
 const wss = new WebSocketServer({server: server});
 
 process.on('SIGINT', async () => {
-	sockets.forEach(s => s.destroy());
-
-	server.close((e) => {
-		console.log(e);
-		shutdownDB();
+	console.log();
+	wss.close(() => {
+		console.log('wss closed');
+		server.closeAllConnections();
+		server.close((e) => {
+			console.log('http server closed')
+			if(e) console.log(e);
+			shutdownDB();
+		});
 	});
-})
+	for(const ws of wss.clients){
+		ws.close();
+	}
+});
 
 // Save created sockets for destriying when server ends
-const sockets = [];
-server.on('connection', (socket) => {
-	sockets.push(socket);
-})
+// const sockets = [];
+// server.on('connection', (socket) => {
+// 	sockets.push(socket);
+// })
 
 wss.on('connection', function connection(ws) {
 	const numClients = wss.clients.size;
@@ -47,13 +54,12 @@ wss.on('connection', function connection(ws) {
 	db.run(`
 		INSERT INTO visitors (count, time)
 		VALUES (${numClients}, datetime('now'))`
-	)
+	);
 
 	ws.on('close', function close(){
 		wss.broadcast(`Current visitors: ${wss.clients.size}`);
 		console.log('A client has disconected');
-	})
-	ws.close();
+	});
 });
 
 wss.broadcast = function brodcast(data) {
